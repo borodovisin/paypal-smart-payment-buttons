@@ -182,7 +182,11 @@ export function getButtonMiddleware({
                 </body>
             `;
 
-            setRootTransaction(req, { userIDToken, clientAccessToken });
+            setRootTransaction(req, { userIDToken, clientAccessToken, rootTxnData: {
+                client_id:   clientID,
+                sdk_version: client.version,
+                spb_version: render.version
+            } });
             allowFrame(res);
             return htmlResponse(res, pageHTML);
         },
