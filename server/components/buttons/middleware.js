@@ -180,8 +180,8 @@ export function getButtonMiddleware({
             const rootTransactionName = getRootTransactionName(userIDToken, clientAccessToken);
 
             setRootTransaction(req, {
-                name:        rootTransactionName,
                 rootTxnData: {
+                    name:                  rootTransactionName,
                     client_id:             clientID,
                     sdk_version:           render.version,
                     smart_buttons_version: render.version

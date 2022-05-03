@@ -5,8 +5,8 @@ import type { ExpressRequest } from '../../types';
 import { ROOT_TRANSACTION_NAME } from './constants';
 
 type SetRootTransactionOptions = {|
-    name : string,
     rootTxnData : $Shape<{|
+        name : string,
         client_id : string,
         sdk_version : string,
         smart_buttons_version : string,
@@ -35,7 +35,7 @@ export const getRootTransactionName = (userIDToken : mixed,
 };
 
 export function setRootTransaction(req : ExpressRequest,
-    { name, rootTxnData } : SetRootTransactionOptions) {
+    { rootTxnData } : SetRootTransactionOptions) {
     req.model = req.model || {};
     req.model.rootTxn = req.model.rootTxn || {
         data: {}
@@ -43,8 +43,8 @@ export function setRootTransaction(req : ExpressRequest,
 
     const rootTxn = req.model.rootTxn;
     const existingData = req.model.rootTxn.data;
-    rootTxn.name = name;
-
+    
+    rootTxn.name = rootTxnData.name;
     req.model.rootTxn.data = {
         ...existingData,
         ...rootTxnData
