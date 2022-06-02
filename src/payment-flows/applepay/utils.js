@@ -78,11 +78,11 @@ function getShippingContactFromAddress(shippingAddress : ?ShippingAddress) : App
 export function getApplePayShippingMethods(shippingMethods : $ReadOnlyArray<ShippingMethod> = []) : $ReadOnlyArray<ApplePayShippingMethod> {
     return [ ...shippingMethods ].sort(method => {
         return method.selected ? -1 : 0;
-    }).map(method => {
+    }).map((method) => {
         return {
             amount:     method?.amount?.currencyValue || '0.00',
-            detail:     '',
-            identifier: method.type,
+            detail:     method.type,
+            identifier: method?.id || '',
             label:      method.label
         };
     });
@@ -148,7 +148,11 @@ export function createApplePayRequest(countryCode : $Values<typeof COUNTRY>, ord
             'name',
             'phone',
             'email'
-        ] : [],
+        ] : [
+            'name',
+            'phone',
+            'email'
+        ],
         shippingContact: shippingContact?.givenName ? shippingContact : {},
         shippingMethods: applePayShippingMethods || [],
         lineItems:       [],
@@ -199,10 +203,10 @@ type ShippingContactValidation = {|
     shipping_address : Shipping_Address
 |};
 
-export function validateShippingContact(contact : ApplePayPaymentContact) : ShippingContactValidation {
+export function validateShippingContact(contact : ?ApplePayPaymentContact) : ShippingContactValidation {
     const errors : Array<ApplePayError> = [];
 
-    if (!contact.locality) {
+    if (!contact?.locality) {
         errors.push({
             code:           'shippingContactInvalid',
             contactField:   'locality',
@@ -210,7 +214,7 @@ export function validateShippingContact(contact : ApplePayPaymentContact) : Ship
         });
     }
 
-    const country_code : ?$Values<typeof COUNTRY> = contact.countryCode ? COUNTRY[contact.countryCode.toUpperCase()] : null;
+    const country_code : ?$Values<typeof COUNTRY> = contact?.countryCode ? COUNTRY[contact.countryCode.toUpperCase()] : null;
     if (!country_code) {
         errors.push({
             code:           'shippingContactInvalid',
@@ -219,7 +223,7 @@ export function validateShippingContact(contact : ApplePayPaymentContact) : Ship
         });
     }
 
-    if (country_code === COUNTRY.US && !contact.administrativeArea) {
+    if (country_code === COUNTRY.US && !contact?.administrativeArea) {
         errors.push({
             code:           'shippingContactInvalid',
             contactField:   'administrativeArea',
@@ -227,7 +231,7 @@ export function validateShippingContact(contact : ApplePayPaymentContact) : Ship
         });
     }
 
-    if (!contact.postalCode) {
+    if (!contact?.postalCode) {
         errors.push({
             code:           'shippingContactInvalid',
             contactField:   'postalCode',
@@ -236,12 +240,11 @@ export function validateShippingContact(contact : ApplePayPaymentContact) : Ship
     }
 
     const shipping_address = {
-        city:         contact.locality,
-        state:        contact.administrativeArea,
+        city:         contact?.locality,
+        state:        contact?.administrativeArea,
         country_code,
-        postal_code:  contact.postalCode
+        postal_code:  contact?.postalCode
     };
 
-    // $FlowFixMe
     return { errors, shipping_address };
 }

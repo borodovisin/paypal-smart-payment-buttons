@@ -110,10 +110,10 @@ export type FundingOption = {|
 |};
 
 export type Shipping_Address = {|
-    city : string,
-    state : string,
-    country_code : $Values<typeof COUNTRY>,
-    postal_code : string
+    city : ?string,
+    state : ?string,
+    country_code : ?$Values<typeof COUNTRY>,
+    postal_code : ?string
 |};
 
 export type ShippingAddress = {|
@@ -128,6 +128,7 @@ export type ShippingAddress = {|
 |};
 
 export type ShippingMethod = {|
+    id? : string,
     amount : {|
         currencyCode : $Values<typeof CURRENCY>,
         currencyValue : string
@@ -196,6 +197,7 @@ export type ApplePayPaymentPass = {|
     activationState : ApplePayPaymentPassActivationState
 |};
 
+// https://developer.apple.com/documentation/apple_pay_on_the_web/applepaypaymentmethod
 export type ApplePayPaymentMethod = {|
     displayName? : string,
     network? : string,

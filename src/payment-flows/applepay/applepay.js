@@ -8,11 +8,14 @@ import { ZalgoPromise } from '@krakenjs/zalgo-promise/src';
 import { getDetailedOrderInfo, approveApplePayPayment, getApplePayMerchantSession } from '../../api';
 import { getLogger, promiseNoop, unresolvedPromise } from '../../lib';
 import { FPTI_CUSTOM_KEY, FPTI_STATE, FPTI_TRANSITION } from '../../constants';
-import type { ApplePayLineItem, ApplePayPaymentContact, ApplePayShippingMethod, ApplePayShippingMethodUpdate, ApplePayShippingContactUpdate, PaymentFlow, PaymentFlowInstance, IsEligibleOptions, IsPaymentEligibleOptions, InitOptions } from '../types';
+import type { ApplePayLineItem, ApplePayPaymentMethod, ApplePayPaymentContact, ApplePayShippingMethod, ApplePayShippingMethodUpdate, ApplePayShippingContactUpdate, PaymentFlow, PaymentFlowInstance, IsEligibleOptions, IsPaymentEligibleOptions, InitOptions } from '../types';
 
 import { createApplePayRequest, isJSON, validateShippingContact, isZeroAmount } from './utils';
 
 const SUPPORTED_VERSION = 4;
+
+const SHIPPING_OPTION = 'SHIPPING_OPTION';
+const SHIPPING_ADDRESS = 'SHIPPING_ADDRESS';
 
 let clean;
 function setupApplePay() : ZalgoPromise<void> {
@@ -55,6 +58,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
 
     function logApplePayEvent(event, payload) {
         const data = isJSON(payload) ? payload : {};
+        // $FlowFixMe
         getLogger().info(`${ FPTI_TRANSITION.APPLEPAY_EVENT }_${ event }`, data)
             .track({
                 [FPTI_KEY.TRANSITION]:      `${ FPTI_TRANSITION.APPLEPAY_EVENT }_${ event }`,
@@ -76,8 +80,8 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
     }
 
     // eslint-disable-next-line flowtype/no-mutable-array
-    function updateNewLineItems({ subtotal, tax, shipping, shippingLabel, shippingIdentifier } : {| subtotal : string, tax : string, shipping : string, shippingLabel : ?string, shippingIdentifier : ?string |}) : Array<ApplePayLineItem> {
-        const newLineItems = [];
+    function updateNewLineItems({ subtotal, tax, shipping, shippingLabel, shippingDetail } : {| subtotal : ?string, tax : ?string, shipping : ?string, shippingLabel : ?string, shippingDetail : ?string |}) : Array<ApplePayLineItem> {
+        const newLineItems : Array<ApplePayLineItem> = [];
 
         if (subtotal && !isZeroAmount(subtotal)) {
             newLineItems.push({
@@ -93,12 +97,12 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
             });
         }
 
-        const isPickup = shippingIdentifier === 'PICKUP';
+        const isPickup = shippingDetail === 'PICKUP';
 
         if ((shipping && !isZeroAmount(shipping)) || isPickup) {
             newLineItems.push({
                 label:  shippingLabel || 'Shipping',
-                amount: shipping
+                amount: shipping || '0.00'
             });
         }
 
@@ -106,14 +110,14 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
     }
 
     function initApplePaySession() : ZalgoPromise<void> {
-        let currentTotalAmount;
-        let currentSubtotalAmount;
-        let currentTaxAmount;
-        let currentShippingAmount;
-        let currentShippingContact;
-        let currentShippingMethod;
+        let currentTotalAmount : ?string;
+        let currentSubtotalAmount : ?string;
+        let currentTaxAmount : ?string;
+        let currentShippingAmount : ?string;
+        let currentShippingContact : ?ApplePayPaymentContact;
+        let currentShippingMethod : ?ApplePayShippingMethod;
 
-        const onShippingChangeCallback = <T>({ orderID, shippingContact, shippingMethod = null } : {| orderID : string, shippingContact : ApplePayPaymentContact, shippingMethod? : ?ApplePayShippingMethod |}) : ZalgoPromise<T> => {
+        const onShippingChangeCallback = <T>({ orderID, shippingContact, shippingMethod = null, callbackTrigger } : {| orderID : string, shippingContact : ?ApplePayPaymentContact, shippingMethod? : ?ApplePayShippingMethod, callbackTrigger : string |}) : ZalgoPromise<T> => {
 
             if (!onShippingChange) {
                 const update = {
@@ -130,7 +134,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                         subtotal:           currentSubtotalAmount,
                         tax:                currentTaxAmount,
                         shippingLabel:      currentShippingMethod?.label,
-                        shippingIdentifier: currentShippingMethod?.identifier
+                        shippingDetail:     currentShippingMethod?.detail
                     }
                 );
 
@@ -155,7 +159,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                         subtotal:           currentSubtotalAmount,
                         tax:                currentTaxAmount,
                         shippingLabel:      currentShippingMethod?.label,
-                        shippingIdentifier: currentShippingMethod?.identifier
+                        shippingDetail:     currentShippingMethod?.detail
                     }
                 );
 
@@ -164,7 +168,8 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
             }
 
             const data = {
-                amount: {
+                callbackTrigger,
+                amount:           {
                     currency_code: currency,
                     value:         '0.00'
                 },
@@ -177,7 +182,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                 data.selected_shipping_option = {
                     label:  shippingMethod.label || currentShippingMethod?.label || 'Shipping',
                     // $FlowFixMe
-                    type:   shippingMethod.identifier,
+                    id:     shippingMethod.identifier,
                     amount: {
                         currency_code: currency,
                         value:         shippingMethod.amount
@@ -188,7 +193,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                 data.selected_shipping_option = {
                     label:  'Shipping',
                     // $FlowFixMe
-                    type:   currentShippingMethod?.identifier,
+                    id:     currentShippingMethod?.identifier,
                     amount: {
                         currency_code: currency,
                         value:         currentShippingAmount
@@ -249,7 +254,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                 subtotal:           currentSubtotalAmount,
                                 tax:                currentTaxAmount,
                                 shippingLabel:      currentShippingMethod?.label,
-                                shippingIdentifier: currentShippingMethod?.identifier
+                                shippingDetail:     currentShippingMethod?.detail
                             }
                         );
 
@@ -307,7 +312,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                     } = order.checkoutSession;
  
                     currentShippingAmount = shippingValue;
-                    currentShippingMethod = applePayRequest.shippingMethods && applePayRequest.shippingMethods.length ? applePayRequest.shippingMethods[0] : null;
+                    currentShippingMethod = (applePayRequest.shippingMethods || []).find(() => true);
                     currentTaxAmount = taxValue;
                     currentSubtotalAmount = subtotalValue;
                     currentTotalAmount = totalValue;
@@ -323,7 +328,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                             completePayment
                         } = response;
 
-                        function validateMerchant({ validationURL }) {
+                        function validateMerchant({ validationURL } : {| validationURL : string |}) {
                             logApplePayEvent('validatemerchant', { validationURL });
 
                             getApplePayMerchantSession({ url: validationURL, clientID, orderID, merchantDomain })
@@ -340,13 +345,13 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                 });
                         }
 
-                        function paymentMethodSelected({ paymentMethod }) {
+                        function paymentMethodSelected({ paymentMethod } : {| paymentMethod : ApplePayPaymentMethod |}) {
                             logApplePayEvent('paymentmethodselected', paymentMethod);
 
                             const update = {
                                 newTotal: {
                                     label:  'Total',
-                                    amount: currentTotalAmount
+                                    amount: currentTotalAmount || '0.00'
                                 },
                                 newLineItems: []
                             };
@@ -356,18 +361,18 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                     subtotal:           currentSubtotalAmount,
                                     tax:                currentTaxAmount,
                                     shippingLabel:      currentShippingMethod?.label,
-                                    shippingIdentifier: currentShippingMethod?.identifier
+                                    shippingDetail:     currentShippingMethod?.detail
                                 }
                             );
 
                             completePaymentMethodSelection(update);
                         }
                         
-                        function shippingMethodSelected({ shippingMethod }) {
+                        function shippingMethodSelected({ shippingMethod } : {| shippingMethod : ApplePayShippingMethod |}) {
                             logApplePayEvent('shippingmethodselected');
 
                             // patch updated amount
-                            onShippingChangeCallback<ApplePayShippingMethodUpdate>({ orderID, shippingContact: currentShippingContact, shippingMethod })
+                            onShippingChangeCallback<ApplePayShippingMethodUpdate>({ orderID, shippingContact: currentShippingContact, shippingMethod, callbackTrigger: SHIPPING_OPTION })
                                 .then(update => {
                                     currentShippingMethod = shippingMethod;
                                     completeShippingMethodSelection(update);
@@ -376,7 +381,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                     const update = {
                                         newTotal: {
                                             label:  'Total',
-                                            amount: currentTotalAmount
+                                            amount: currentTotalAmount || '0.00'
                                         },
                                         newLineItems: []
                                     };
@@ -386,7 +391,7 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                             subtotal:           currentSubtotalAmount,
                                             tax:                currentTaxAmount,
                                             shippingLabel:      shippingMethod?.label,
-                                            shippingIdentifier: currentShippingMethod?.identifier
+                                            shippingDetail:     currentShippingMethod?.detail
                                         }
                                     );
 
@@ -394,11 +399,11 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                                 });
                         }
 
-                        function shippingContactSelected({ shippingContact }) {
+                        function shippingContactSelected({ shippingContact } : {| shippingContact : ApplePayPaymentContact |}) {
                             logApplePayEvent('shippingcontactselected', shippingContact);
 
                             // patch updated shipping contact information
-                            onShippingChangeCallback<ApplePayShippingContactUpdate>({ orderID, shippingContact, shippingMethod: currentShippingMethod })
+                            onShippingChangeCallback<ApplePayShippingContactUpdate>({ orderID, shippingContact, shippingMethod: currentShippingMethod, callbackTrigger: SHIPPING_ADDRESS })
                                 .then(update => {
                                     completeShippingContactSelection(update);
                                 })
@@ -415,11 +420,11 @@ function initApplePay({ props, payment, serviceData } : InitOptions) : PaymentFl
                             }
                             
                             // For some reason country code comes back as lowercase from Apple
-                            if (applePayPayment.shippingContact && applePayPayment.shippingContact.countryCode) {
+                            if (applePayPayment?.shippingContact?.countryCode) {
                                 applePayPayment.shippingContact.countryCode = applePayPayment.shippingContact.countryCode.toUpperCase();
                             }
 
-                            if (applePayPayment.billingContact && applePayPayment.billingContact.countryCode) {
+                            if (applePayPayment?.billingContact?.countryCode) {
                                 applePayPayment.billingContact.countryCode = applePayPayment.billingContact.countryCode.toUpperCase();
                             }
 
