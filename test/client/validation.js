@@ -715,7 +715,7 @@ describe('validation cases', () => {
                 });
             }));
 
-            window.xprops.onApprove = mockAsyncProp(avoid('onApprove'));
+            window.xprops.onApprove = await mockAsyncProp(avoid('onApprove'));
             window.xprops.onError = expect('onError');
 
             createButtonHTML();
@@ -961,7 +961,7 @@ describe('validation cases', () => {
         });
     });
 
-    it.skip('should render a button with intent=authorize and order id with intent=order, click the button, and render checkout, then fail to approve the payment', async () => {
+    it('should render a button with intent=authorize and order id with intent=order, click the button, and render checkout, then fail to approve the payment', async () => {
         return await wrapPromise(async ({ expect, avoid }) => {
 
             const orderID = generateOrderID();
@@ -1007,7 +1007,7 @@ describe('validation cases', () => {
                 });
             }));
 
-            window.xprops.onApprove = mockAsyncProp(avoid('onApprove'));
+            window.xprops.onApprove = await mockAsyncProp(avoid('onApprove'));
             window.xprops.onError = expect('onError');
 
             createButtonHTML();
